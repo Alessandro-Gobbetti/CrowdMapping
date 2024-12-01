@@ -9,9 +9,9 @@ import numpy as np
 import pymongo
 import math
 
-IP = "localhost"
+IP = "0.0.0.0"
 PORT = 9999
-MONGO_IP = "localhost"
+MONGO_IP = "0.0.0.0"
 MONGO_PORT = 27017
 
 # YOLO model to detect objects in images
@@ -29,6 +29,7 @@ db = client["CrowdMap"]
 collection_stats = db["Stats"]
 collection_data = db["Data"]
 
+# TODO: remove this, just for testing purposes
 # clear the collections
 collection_stats.delete_many({})
 collection_data.delete_many({})
@@ -304,7 +305,8 @@ def main():
     server.bind((IP, PORT))
     server.listen(5)
 
-    print(f"Server listening on {server.getsockname()}")
+    server_ip = socket.gethostbyname(socket.gethostname())
+    print(f"Server started at {server_ip}:{PORT}")
 
     while True:
         client_socket, addr = server.accept()

@@ -28,7 +28,7 @@ def main():
         "image": encoded_image,
         "gps": "37.7749,-122.4194",  # Example GPS coordinates
         "noise": "50",  # Example noise value
-        "date": "2023-10-01",  # Example date
+        "date": "2023-10-01 12:00:00",  # Example date
         "id": "device_123"  # Example device ID
     }
     json_data = json.dumps(data)
