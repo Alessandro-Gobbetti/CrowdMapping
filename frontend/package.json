@@ -1,0 +1,31 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "vite preview",
+    "build": "vite build",
+    "lint": "vue-cli-service lint",
+    "dev": "vite",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@mdi/font": "5.9.55",
+    "express": "^4.18.1",
+    "troisjs": "^0.3.3",
+    "vue": "^3.2.33",
+    "vue-cookies": "^1.8.2",
+    "vue-router": "^4.0.13",
+    "vue-snip": "^2.0.0",
+    "vuetify": "^3.0.0-beta.0",
+    "vuex": "^4.0.0",
+    "webfontloader": "^1.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^3.0.3",
+    "@vue/cli-service": "^5.0.4",
+    "vite": "^3.0.8",
+    "vite-plugin-vuetify": "^1.0.0-alpha.12",
+    "vue-cli-plugin-vuetify": "~2.5.8"
+  }
+}
