@@ -1,3 +1,5 @@
+from flask import Flask, jsonify, request, Blueprint
+from flask_cors import CORS
 import base64
 import matplotlib.pyplot as plt
 import socket
@@ -300,21 +302,49 @@ def handle_client(client_socket):
     print(get_stats(gps))
 
 
+# def main():
+#     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#     server.bind((IP, PORT))
+#     server.listen(5)
+
+#     server_ip = socket.gethostbyname(socket.gethostname())
+#     print(f"Server started at {server_ip}:{PORT}")
+
+#     while True:
+#         client_socket, addr = server.accept()
+#         print(client_socket.recv(1024))
+#         print(f"Accepted connection from {addr}")
+#         # parse http request
+
+#         # client_handler = threading.Thread(
+#         #     target=handle_client, args=(client_socket,))
+#         # client_handler.start()
+
+
+app = Flask(__name__)
+CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 1600 * 1024 * 1024
+
+
 def main():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((IP, PORT))
-    server.listen(5)
+    app.run(host='0.0.0.0', port=9999, threaded=True, debug=True)
 
-    server_ip = socket.gethostbyname(socket.gethostname())
-    print(f"Server started at {server_ip}:{PORT}")
 
-    while True:
-        client_socket, addr = server.accept()
-        print(f"Accepted connection from {addr}")
+@app.route('/get/stats', methods=['GET'])
+def get_statistics():
+    gps = request.args.get('gps', '0,0')
+    stats = {"people": 10, "vehicles": 5}
+    return jsonify(stats)
 
-        client_handler = threading.Thread(
-            target=handle_client, args=(client_socket,))
-        client_handler.start()
+
+@app.route('/upload', methods=['POST'])
+def upload_data():
+
+    data = request.get_data()
+    if not data:
+        return jsonify({"status": "error", "message": "No data received"}), 400
+
+    return jsonify({"status": "success"}), 200
 
 
 if __name__ == "__main__":

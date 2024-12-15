@@ -25,7 +25,6 @@ def main():
         encoded_image = base64.b64encode(np_image).decode()
 
     data = {
-        "image": encoded_image,
         "gps": "37.7749,-122.4194",  # Example GPS coordinates
         "noise": "50",  # Example noise value
         "date": "2023-10-01 12:00:00",  # Example date
@@ -37,11 +36,23 @@ def main():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((SERVER_IP, SERVER_PORT))
 
+    request = "POST /upload HTTP/1.1\r\n"
+    request += f"Host: {SERVER_IP}:{SERVER_PORT}\r\n"
+    request += "Content-Type: application/json\r\n"
+    request += f"Content-Length: {len(encoded_image.encode('utf-8'))}\r\n"
+    request += "\r\n"
+    # to bytestring
+    request = request.encode('utf-8')
+    # request += json_data.encode('utf-8')
+    request += encoded_image.encode('utf-8')
+
+    print(request)
+
     # Send the JSON data
-    client_socket.sendall(json_data.encode('utf-8'))
+    client_socket.sendall(request)
 
     # print message size
-    print(f"Sent {len(json_data)} bytes")
+    print(f"Sent {len(request)} bytes")
 
     # Close the socket
     client_socket.close()
