@@ -55,15 +55,24 @@ export default {
 
     async fetchData() {
       try {
-        const response = await fetch("/DemoData.json");
+        // Fetch data from the server
+        const date_range = ['2021-10-01 10:10:19', '2025-10-31 10:10:19'];
+        const url = `${import.meta.env.VITE_BACKEND_URL}/get?date_range=${date_range.join(',')}`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
         const data = await response.json();
 
-        if (data.success && Array.isArray(data.data)) {
+        if (Array.isArray(data.data)) {
           this.locations = data.data;
+          console.log(this.locations)
 
           // Add markers and circles for crowd, noise, and vehicles
           this.locations.forEach((location) => {
-            const [lat, lon] = location.gps.split(",").map(Number);
+            const [lat, lon] = [location.gps_lat, location.gps_lon];
             this.addCrowdMarkerAndCircle(lat, lon, location);
             this.addNoiseMarkerAndCircle(lat, lon, location);
             this.addVehiclesMarkerAndCircle(lat, lon, location);
@@ -161,9 +170,9 @@ export default {
       // Define the circle color based on the number of vehicles
       if (vehicleData.vehicles >= 100) {
         circleColor = "darkred"; // High traffic
-      } else if (vehicleData.vehicles >= 50 && vehicleData.vehicles <100) {
+      } else if (vehicleData.vehicles >= 50 && vehicleData.vehicles < 100) {
         circleColor = "red"; // Moderate traffic
-      } else if (vehicleData.vehicles >= 0 && vehicleData.vehicles <50) {
+      } else if (vehicleData.vehicles >= 0 && vehicleData.vehicles < 50) {
         circleColor = "green"; // Low traffic
       }
 
@@ -217,14 +226,16 @@ export default {
 <style scoped>
 /* Ensure map height is set correctly */
 #map-container {
-  height: 900px; /* Increased height */
+  height: 900px;
+  /* Increased height */
   width: 100%;
   margin-top: 20px;
 }
 
 /* Style for the map */
 #map {
-  height: 100%; /* Ensure the map fills the container */
+  height: 100%;
+  /* Ensure the map fills the container */
   width: 100%;
 }
 </style>

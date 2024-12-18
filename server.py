@@ -102,7 +102,7 @@ def populate_db():
             "gps_lat": 46.016800360890905,
             "gps_lon": 8.957521910617551,
             "noise": 160,
-            "date": "2023-10-01 12:00:00",
+            "date": "2024-12-18 22:30:35",
             "device_id": "device_123"
         },
         {
@@ -111,7 +111,7 @@ def populate_db():
             "gps_lat": 46.00511056282624,
             "gps_lon": 8.952675611058293,
             "noise": 55,
-            "date": "2023-10-01 13:00:00",
+            "date": "2024-12-18 23:30:35",
             "device_id": "device_456"
         },
         {
@@ -120,7 +120,7 @@ def populate_db():
             "gps_lat": 46.007423160698565,
             "gps_lon": 8.952180968730389,
             "noise": 120,
-            "date": "2023-10-01 13:00:00",
+            "date": "2024-12-18 21:30:35",
             "device_id": "device_456"
         },
         {
@@ -129,7 +129,7 @@ def populate_db():
             "gps_lat": 46.00950219494022,
             "gps_lon": 8.952889071904426,
             "noise": 80,
-            "date": "2023-10-01 13:00:00",
+            "date": "2024-12-18 20:30:35",
             "device_id": "device_456"
         }
     ]
@@ -371,8 +371,13 @@ def get_statistics():
     """
 
     date_range = request.args.get("date_range")
-    if date_range is None:
-        date_range = [datetime.datetime.now() - datetime.timedelta(hours=1),
+    print("DATE_RANGE", date_range)
+    if date_range is not None:
+        date_range = date_range.split(",")
+        date_range = [datetime.datetime.strptime(date_range[0], "%Y-%m-%d %H:%M:%S"),
+                      datetime.datetime.strptime(date_range[1], "%Y-%m-%d %H:%M:%S")]
+    else:
+        date_range = [datetime.datetime.now() - datetime.timedelta(hours=2),
                       datetime.datetime.now() + datetime.timedelta(weeks=52)]
 
     pipeline = [
