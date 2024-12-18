@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import pymongo
 import math
+import os
 
 IP = "0.0.0.0"
 PORT = 9999
@@ -341,6 +342,15 @@ def get_statistics():
 def upload_data():
 
     data = request.get_data()
+    # parse request: split data into image and metadata
+    json_data, image = data.split(b'\r\n')
+    json_data = json_data.decode()
+    image_filename = os.path.join("images", "last_image.png")
+    image_array = np.frombuffer(image, dtype=np.uint8).reshape((240, 320))
+    plt.imsave(image_filename, image_array, cmap='gray')
+
+    people, vehicles = count_objects(image_filename)
+
     if not data:
         return jsonify({"status": "error", "message": "No data received"}), 400
 
