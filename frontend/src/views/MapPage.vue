@@ -22,6 +22,7 @@
 <script>
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { viewDepthKey } from "vue-router";
 
 export default {
   name: "MapPage",
@@ -94,36 +95,32 @@ export default {
       let circleColor;
 
       // Define the circle color based on the number of people
-      if (locationData.people >= 200) {
-        circleColor = "darkred";
-      } else if (locationData.people >= 150) {
-        circleColor = "red";
-      } else if (locationData.people >= 100) {
-        circleColor = "darkgreen";
-      } else if (locationData.people >= 50) {
-        circleColor = "green";
-      } else {
-        circleColor = "lightgreen";
-      }
+      let maxPeople = 200;
+      const hue = Math.max(0, Math.min(maxPeople - locationData.people, maxPeople));
+      circleColor = `hsl(${hue}, 100%, 50%)`;
+
 
       // Add a marker at the GPS location with the number of people
-      const marker = L.marker([lat, lon]).addTo(this.crowdLayer);
-      marker.bindTooltip(
-        `<strong>People:</strong> ${locationData.people}`,
-        {
-          permanent: true,
-          direction: "top",
-          offset: [0, -10],
-        }
-      );
+      L.marker([lat, lon]).addTo(this.crowdLayer);
 
       // Add a circle around the marker
-      L.circle([lat, lon], {
+      const circle = L.circle([lat, lon], {
         color: circleColor,
         fillColor: circleColor,
         fillOpacity: 0.5,
         radius: radius,
       }).addTo(this.crowdLayer);
+
+      circle.bindTooltip(
+        `<strong>People:</strong> ${locationData.people} <br>
+        <strong>Usual:</strong> ${Math.round(locationData.stats_people)} <br>
+        <strong>Crowd:</strong> ${Math.round(locationData.people / locationData.stats_people * 100)}%`,
+        {
+          direction: "top",
+          offset: [0, -10],
+          className: "fade-tooltip",
+        }
+      );
     },
 
     // Method to add noise marker and circle
@@ -132,34 +129,31 @@ export default {
       let circleColor;
 
       // Define the circle color based on the noise level
-      if (noiseData.noise >= 100) {
-        circleColor = "darkred"; // Very Loud
-      } else if (noiseData.noise > 70 && noiseData.noise <= 100) {
-        circleColor = "lightcoral"; // Loud
-      } else if (noiseData.noise >= 50 && noiseData.noise <= 70) {
-        circleColor = "darkgreen"; // Noisy
-      } else {
-        circleColor = "lightgreen"; // Moderate
-      }
+      let maxNoise = 100;
+      const hue = Math.max(0, Math.min(maxNoise - noiseData.noise, maxNoise));
+      circleColor = `hsl(${hue}, 100%, 50%)`;
 
       // Add a marker for noise level data
-      const marker = L.marker([lat, lon]).addTo(this.noiseLayer);
-      marker.bindTooltip(
-        `<strong>Noise Level:</strong> ${noiseData.noise} dB`,
-        {
-          permanent: true,
-          direction: "top",
-          offset: [0, -10],
-        }
-      );
+      L.marker([lat, lon]).addTo(this.noiseLayer);
 
       // Add a circle around the marker
-      L.circle([lat, lon], {
+      const circle = L.circle([lat, lon], {
         color: circleColor,
         fillColor: circleColor,
         fillOpacity: 0.5,
         radius: radius,
       }).addTo(this.noiseLayer);
+
+      circle.bindTooltip(
+        `<strong>Noise Level:</strong> ${noiseData.noise} dB <br>
+        <strong>Usual:</strong> ${Math.round(noiseData.stats_noise)} dB <br>
+        <strong>Noisy:</strong> ${Math.round(noiseData.noise - noiseData.stats_noise)} dB`,
+        {
+          direction: "top",
+          offset: [0, -10],
+          className: "fade-tooltip",
+        }
+      );
     },
 
     // Method to add vehicle marker and circle
@@ -168,32 +162,32 @@ export default {
       let circleColor;
 
       // Define the circle color based on the number of vehicles
-      if (vehicleData.vehicles >= 100) {
-        circleColor = "darkred"; // High traffic
-      } else if (vehicleData.vehicles >= 50 && vehicleData.vehicles < 100) {
-        circleColor = "red"; // Moderate traffic
-      } else if (vehicleData.vehicles >= 0 && vehicleData.vehicles < 50) {
-        circleColor = "green"; // Low traffic
-      }
+      // Calculate the hue based on the number of vehicles (0 vehicles = green, 100+ vehicles = red)
+      let maxVehicles = 150;
+      const hue = Math.max(0, Math.min(maxVehicles - (vehicleData.vehicles * 1.2), maxVehicles));
+      circleColor = `hsl(${hue}, 100%, 50%)`;
 
       // Add a marker for vehicle data
-      const marker = L.marker([lat, lon]).addTo(this.vehiclesLayer);
-      marker.bindTooltip(
-        `<strong>Vehicles:</strong> ${vehicleData.vehicles}`,
-        {
-          permanent: true,
-          direction: "top",
-          offset: [0, -10],
-        }
-      );
+      L.marker([lat, lon]).addTo(this.vehiclesLayer);
 
       // Add a circle around the marker
-      L.circle([lat, lon], {
+      const circle = L.circle([lat, lon], {
         color: circleColor,
         fillColor: circleColor,
         fillOpacity: 0.5,
         radius: radius,
       }).addTo(this.vehiclesLayer);
+
+      circle.bindTooltip(
+        `<strong>Vehicles:</strong> ${vehicleData.vehicles} <br>
+        <strong>Usual:</strong> ${Math.round(vehicleData.stats_vehicles)} <br>
+        <strong>Traffic:</strong> ${Math.round(vehicleData.vehicles / vehicleData.stats_vehicles * 100)}%`,
+        {
+          direction: "top",
+          offset: [0, -10],
+          className: ".fade-tooltip",
+        }
+      );
     },
 
     // Update the map view based on selected map type (crowd, noise, or vehicles)
