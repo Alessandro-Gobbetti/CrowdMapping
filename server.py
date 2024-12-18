@@ -1,3 +1,4 @@
+import datetime
 from flask import Flask, jsonify, request, Blueprint
 from flask_cors import CORS
 import base64
@@ -17,6 +18,8 @@ PORT = 9999
 MONGO_IP = "0.0.0.0"
 MONGO_PORT = 27017
 
+GPS_PRECISION = 0.001
+
 # YOLO model to detect objects in images
 print("Loading model...")
 model = YOLO('yolov8s.pt')
@@ -32,19 +35,6 @@ db = client["CrowdMap"]
 collection_stats = db["Stats"]
 collection_data = db["Data"]
 
-# TODO: remove this, just for testing purposes
-# clear the collections
-collection_stats.delete_many({})
-collection_data.delete_many({})
-
-
-# Example of received content:
-# {"image": "base64_encoded_image",
-#  "gps": "latitude,longitude",
-#  "noise": "value",
-#  "date": "date",
-#  "id": "device_id"}
-
 
 def count_objects(image):
     """
@@ -59,6 +49,8 @@ def count_objects(image):
             - The number of vehicles detected in the image.
     """
     vehicle_types = ['car', 'motorcycle', 'bus', 'truck']
+
+    # yolo on grayscale image
 
     results = model.predict(image)
     a = results[0].boxes.data
@@ -101,7 +93,56 @@ def print_all_db():
         print(stat)
 
 
-def add_new_data_to_db(people, vehicles, gps, noise, date, device_id):
+def populate_db():
+
+    demo_data = [
+        {
+            "people": 210,
+            "vehicles": 130,
+            "gps_lat": 46.016800360890905,
+            "gps_lon": 8.957521910617551,
+            "noise": 160,
+            "date": "2023-10-01 12:00:00",
+            "device_id": "device_123"
+        },
+        {
+            "people": 160,
+            "vehicles": 100,
+            "gps_lat": 46.00511056282624,
+            "gps_lon": 8.952675611058293,
+            "noise": 55,
+            "date": "2023-10-01 13:00:00",
+            "device_id": "device_456"
+        },
+        {
+            "people": 90,
+            "vehicles": 5,
+            "gps_lat": 46.007423160698565,
+            "gps_lon": 8.952180968730389,
+            "noise": 120,
+            "date": "2023-10-01 13:00:00",
+            "device_id": "device_456"
+        },
+        {
+            "people": 120,
+            "vehicles": 60,
+            "gps_lat": 46.00950219494022,
+            "gps_lon": 8.952889071904426,
+            "noise": 80,
+            "date": "2023-10-01 13:00:00",
+            "device_id": "device_456"
+        }
+    ]
+
+    for data in demo_data:
+        add_new_data_to_db(data["people"], data["vehicles"], data["gps_lat"],
+                           data["gps_lon"], data["noise"], data["date"], data["device_id"])
+
+    print("Populated the database with demo data.")
+    print_all_db()
+
+
+def add_new_data_to_db(people, vehicles, gps_lat, gps_lon, noise, date, device_id):
     """
     Adds new data to the database and updates statistics.
 
@@ -115,20 +156,25 @@ def add_new_data_to_db(people, vehicles, gps, noise, date, device_id):
     Returns:
         None
     """
+
+    # convert date to datetime
+    date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+
     new_data = {
         "people": people,
         "vehicles": vehicles,
-        "gps": gps,
+        "gps_lat": gps_lat,
+        "gps_lon": gps_lon,
         "noise": noise,
         "date": date,
         "device_id": device_id
     }
     collection_data.insert_one(new_data)
 
-    update_stats(people, vehicles, gps, noise, date)
+    update_stats(people, vehicles, gps_lat, gps_lon, noise, date)
 
 
-def approximate_gps(gps, precision=4):
+def approximate_gps(gps_lat, gps_lon, precision=1000):
     """
     Approximates a given GPS coordinate to the nearest grid points based on the specified precision.
     Args:
@@ -138,7 +184,7 @@ def approximate_gps(gps, precision=4):
         list of tuples: A list of four tuples, each containing the latitude, longitude, and weight of the 
                         approximated grid points. The weights are computed using bilinear interpolation.
     """
-    lat, lon = gps.split(",")
+    lat, lon = gps_lat, gps_lon
     lat = float(lat)
     lon = float(lon)
 
@@ -161,29 +207,43 @@ def approximate_gps(gps, precision=4):
     # normalize the weights
     weights = [weight / sum(weights) for weight in weights]
 
-    return [(bottom_left[0], bottom_left[1], weights[0]),
-            (bottom_right[0], bottom_right[1], weights[1]),
-            (top_left[0], top_left[1], weights[2]),
-            (top_right[0], top_right[1], weights[3])]
+    res = [(bottom_left[0], bottom_left[1], weights[0]),
+           (bottom_right[0], bottom_right[1], weights[1]),
+           (top_left[0], top_left[1], weights[2]),
+           (top_right[0], top_right[1], weights[3])]
+
+    # sum the weights if the coordinates are the same
+    combined = {}
+    for x, y, z in res:
+        if (x, y) in combined:
+            combined[(x, y)] += z
+        else:
+            combined[(x, y)] = z
+
+    # Convert the dictionary back to a list
+    res = [(x, y, z) for (x, y), z in combined.items()]
+
+    return res
 
 
-def update_stats(people, vehicles, gps, noise, date):
+def update_stats(people, vehicles, gps_lat, gps_lon, noise, date):
     """
     Updates the statistics collection in the database with the given data based on the GPS coordinates.
-    The statistics are rolling mean values of the number of people, vehicles, and noise levels in a given area.
-    The stats are updated based on the weights computed using bilinear interpolation.
-    Old data is 
+    The statistics stored in the database are the sum of the people, vehicles, and noise weighted by the distance to the center of the grid point.
+    The weights are computed using bilinear interpolation based on the distance to the four nearest grid points (see approximate_gps function).
     """
-    location = approximate_gps(gps)
+    location = approximate_gps(gps_lat, gps_lon)
+    print("Location", location)
 
     for loc in location:
         lat, lon, weight = loc
         # find the document with the given location
-        doc = collection_stats.find_one({"gps": f"{lat},{lon}"})
+        doc = collection_stats.find_one({"gps_lat": lat, "gps_lon": lon})
         if doc is None:
             # create a new document
             new_doc = {
-                "gps": f"{lat},{lon}",
+                "gps_lat": lat,
+                "gps_lon": lon,
                 "people": people * weight,
                 "vehicles": vehicles * weight,
                 "noise": noise * weight,
@@ -194,14 +254,11 @@ def update_stats(people, vehicles, gps, noise, date):
 
         else:
             # update the document the rolling mean
-            new_people = (doc["people"] * doc["weight"] +
-                          people * weight) / (doc["weight"] + weight)
-            new_vehicles = (doc["vehicles"] * doc["weight"] +
-                            vehicles * weight) / (doc["weight"] + weight)
-            new_noise = (doc["noise"] * doc["weight"] +
-                         noise * weight) / (doc["weight"] + weight)
+            new_people = doc["people"] + people * weight
+            new_vehicles = doc["vehicles"] + vehicles * weight
+            new_noise = doc["noise"] + noise * weight
 
-            collection_stats.update_one({"gps": f"{lat},{lon}"},
+            collection_stats.update_one({"gps_lat": lat, "gps_lon": lon},
                                         {"$set": {"people": new_people,
                                                   "vehicles": new_vehicles,
                                                   "noise": new_noise,
@@ -209,9 +266,12 @@ def update_stats(people, vehicles, gps, noise, date):
                                         )
 
 
-def get_stats(gps):
+def get_stats(gps_lat, gps_lon):
     """
     Get the statistics for a given GPS coordinate.
+    This function queries the statistics collection in the database for the given GPS coordinates and returns the statistics.
+    A separate database is used to precompute statistics for each grid point based on the data collected.
+    Statistics are updated when new data is added to the main database (see update_stats function).
 
     Args:
         gps (str): The GPS coordinates in the format "latitude,longitude".
@@ -220,19 +280,24 @@ def get_stats(gps):
         dict: A dictionary containing the statistics for the given GPS coordinates.
     """
 
-    gps_approx = approximate_gps(gps)
+    gps_approx = approximate_gps(gps_lat, gps_lon)
     stats = []
     for loc in gps_approx:
         lat, lon, _ = loc
-        doc = collection_stats.find_one({"gps": f"{lat},{lon}"})
+        doc = collection_stats.find_one({"gps_lat": lat, "gps_lon": lon})
         if doc:
             stats.append(doc)
 
-    print(sum([loc[2] for loc in gps_approx]))
+    print("SUM", sum([loc[2] for loc in gps_approx]))
     result = {}
+
+    # normalize the weights
+    stats_weight_sum = sum(stat["weight"] for stat in stats)
     # compute the weighted average of the statistics
     for stat, weight in zip(stats, [loc[2] for loc in gps_approx]):
         for key in ["people", "vehicles", "noise"]:
+
+            print("STAT", weight, stat[key], stat["weight"])
             if key in result:
                 result[key] += stat[key] / stat["weight"] * weight
             else:
@@ -241,86 +306,53 @@ def get_stats(gps):
     return result
 
 
-def handle_client(client_socket):
+def get_avg_stats(gps_lat, gps_lon):
     """
-    Handles the client connection, receives data, processes the image, counts objects, and stores data in the database.
+    Get the average statistics for a given GPS coordinate and its neighbors.
+    This function queries the database for the neighbors of the given GPS coordinate and computes the weighted average of the statistics based on the distance to the center.
+    This is less efficient then the get_stats function as it requires mulitple queries to the database and more computation.
 
     Args:
-        client_socket (socket.socket): The socket object for the client connection.
+        gps_lat (float): The latitude of the GPS coordinates.
+        gps_lon (float): The longitude of the GPS coordinates.
+        neigh (list): A list of dictionaries containing the statistics for the neighbors.
 
-    The function performs the following steps:
-        1. Receives data from the client in chunks of 1 MB until all data is received.
-        2. Parses the received data as a JSON object.
-        3. Decodes the base64-encoded image from the JSON object.
-        4. Converts the image to a NumPy array and reshapes it to the expected dimensions.
-        5. Counts the number of people and vehicles in the image.
-        6. Stores the counted objects and additional data in a MongoDB database.
+    Returns:
+        dict: the weighted average of the statistics for the given GPS coordinate and its neighbors based on the distance.
     """
-    buffer_size = 1024 * 1024  # 1 MB buffer size
-    data = b""
+    result = {}
+    neigh = collection_data.find(
+        {"gps_lat": {"$gte": gps_lat - GPS_PRECISION, "$lte": gps_lat + GPS_PRECISION},
+         "gps_lon": {"$gte": gps_lon - GPS_PRECISION, "$lte": gps_lon + GPS_PRECISION}})
+    neigh = list(neigh)
+    # average the stats based on the distance to the center
+    sigma = 0.1
+    total_weight = 0
 
-    while True:
-        part = client_socket.recv(buffer_size)
-        data += part
-        if len(part) < buffer_size:
-            break
-        print("Receiving data...")
+    for n in neigh:
+        distance = math.sqrt((n["gps_lat"] - gps_lat) **
+                             2 + (n["gps_lon"] - gps_lon) ** 2)
+        weight = math.exp(-distance**2 / (2 * sigma**2))
 
-    print(f"Received {len(data)} bytes")
-    client_socket.close()
+        for key in ["people", "vehicles", "noise"]:
+            if key in result:
+                result[key] += n[key] * weight
+            else:
+                result[key] = n[key] * weight
 
-    # parse request
-    request = json.loads(data.decode())
-    image = request.get("image")
-    image = base64.b64decode(image)
+        total_weight += weight
 
-    image = np.frombuffer(image, dtype=np.uint8)
-    image = image.reshape((240, 320))
+    for key in ["people", "vehicles", "noise"]:
+        result[key] /= total_weight
 
-    # image to rgb for yolo
-    image = np.stack((image,) * 3, axis=-1)
-
-    # save image with matplotlib
-    # plt.imshow(image, cmap='gray')
-    # plt.savefig("received_image.png")
-
-    # count objects
-    people, vehicles = count_objects(image)
-    print(f"Detected {people} people and {vehicles} vehicles")
-
-    # push data to mongo database
-    # FIXME: add the rest of the data
-    gps = request.get("gps") or "0,0"
-    noise = int(request.get("noise") or "0")
-    date = request.get("date") or "0"
-    device_id = request.get("id") or "0"
-
-    add_new_data_to_db(people, vehicles, gps, noise, date, device_id)
-
-    # TODO: remove this, just for testing purposes
-    print_all_db()
-    print("------------------"*3)
-    print(get_stats(gps))
+    return result
 
 
-# def main():
-#     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#     server.bind((IP, PORT))
-#     server.listen(5)
-
-#     server_ip = socket.gethostbyname(socket.gethostname())
-#     print(f"Server started at {server_ip}:{PORT}")
-
-#     while True:
-#         client_socket, addr = server.accept()
-#         print(client_socket.recv(1024))
-#         print(f"Accepted connection from {addr}")
-#         # parse http request
-
-#         # client_handler = threading.Thread(
-#         #     target=handle_client, args=(client_socket,))
-#         # client_handler.start()
-
+# TODO: remove this, just for testing purposes
+# clear the collections
+collection_stats.delete_many({})
+collection_data.delete_many({})
+populate_db()
 
 app = Flask(__name__)
 CORS(app)
@@ -331,11 +363,46 @@ def main():
     app.run(host='0.0.0.0', port=9999, threaded=True, debug=True)
 
 
-@app.route('/get/stats', methods=['GET'])
+@app.route('/get', methods=['GET'])
 def get_statistics():
-    gps = request.args.get('gps', '0,0')
-    stats = {"people": 10, "vehicles": 5}
-    return jsonify(stats)
+    """
+    Get the data and statistics on the history of the neighborhood of each entry in the database for a given date range. 
+    Only most recent data from sanme device when in the same location is considered.
+    """
+
+    date_range = request.args.get("date_range")
+    if date_range is None:
+        date_range = [datetime.datetime.now() - datetime.timedelta(hours=1),
+                      datetime.datetime.now() + datetime.timedelta(weeks=52)]
+
+    pipeline = [
+        {"$match": {"date": {"$gte": date_range[0], "$lte": date_range[1]}}},
+        {"$sort": {"date": -1}},
+        {"$group": {
+            "_id": {
+                "device_id": "$device_id",
+                "gps_lat": {"$round": ["$gps_lat", -int(math.log10(GPS_PRECISION))]},
+                "gps_lon": {"$round": ["$gps_lon", -int(math.log10(GPS_PRECISION))]}
+            },
+            "most_recent": {"$first": "$$ROOT"}
+        }},
+        {"$replaceRoot": {"newRoot": "$most_recent"}}
+    ]
+    query = collection_data.aggregate(pipeline)
+
+    query_list = list(query)
+    # remove the id
+    for q in query_list:
+        del q["_id"]
+        # range query gps with precision
+        stats = get_stats(q["gps_lat"], q["gps_lon"])
+        q["stats_people"] = stats["people"]
+        q["stats_vehicles"] = stats["vehicles"]
+        q["stats_noise"] = stats["noise"]
+
+    print("QUERY", query_list)
+    # reply with the statistics
+    return jsonify({"status": "success", "data": query_list}), 200
 
 
 @app.route('/upload', methods=['POST'])
@@ -343,13 +410,43 @@ def upload_data():
 
     data = request.get_data()
     # parse request: split data into image and metadata
-    json_data, image = data.split(b'\r\n')
-    json_data = json_data.decode()
-    image_filename = os.path.join("images", "last_image.png")
-    image_array = np.frombuffer(image, dtype=np.uint8).reshape((240, 320))
-    plt.imsave(image_filename, image_array, cmap='gray')
+    parsed_data = data.split(b'\r\n\r\n')
+    if len(parsed_data) != 2:
+        return jsonify({"status": "error", "message": "Missing data"}), 400
 
-    people, vehicles = count_objects(image_filename)
+    json_data, image = parsed_data
+    json_data = json_data.decode()  # convert bytes to string
+    # handle the case when the json data is not valid
+    try:
+        json_data = json.loads(json_data)
+
+    except json.JSONDecodeError:
+        return jsonify({"status": "error", "message": "Invalid JSON data"}), 400
+
+    # read the raw the image data
+    try:
+        image_array = np.frombuffer(image, dtype=np.uint8).reshape((240, 320))
+    except ValueError:
+        return jsonify({"status": "error", "message": "Invalid image data"}), 400
+
+    # save the image to a file
+    # image_filename = os.path.join("images", "last_image.png")
+    # plt.imsave(image_filename, image_array, cmap='gray')
+
+    image = np.stack((image_array,) * 3, axis=-1)
+    people, vehicles = count_objects(image)
+
+    # push data to mongo database
+    gps_lat = float(json_data.get("gps_lat")) or 0.0
+    gps_lon = float(json_data.get("gps_lon")) or 0.0
+    noise = float(json_data.get("noise") or 0)
+    date = json_data.get("date") or datetime.datetime.now().isoformat()
+    # todo: parse date
+    date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    device_id = json_data.get("id") or "0"
+
+    add_new_data_to_db(people, vehicles, gps_lat,
+                       gps_lon, noise, date, device_id)
 
     if not data:
         return jsonify({"status": "error", "message": "No data received"}), 400
