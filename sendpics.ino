@@ -43,8 +43,11 @@ WiFiClient client;
 
 Thread cameraThread(osPriorityNormal, 8192, nullptr, "CameraThread");
 Thread audioThread(osPriorityNormal, 8192, nullptr, "AudioThread");
-Thread networkThread(osPriorityNormal, 8192, nullptr, "NetworkThread");
+Thread networkThread(osPriorityNormal, 16384, nullptr, "NetworkThread"); // Increased stack size
 Mutex bufferMutex;
+
+// Chunk size for image transmission
+const size_t CHUNK_SIZE = 512;
 
 // static unsigned char output[110000];
 
@@ -113,13 +116,22 @@ void networkTask() {
         double averageDb = 20.0 * log10(rms + 1e-8);
 
         // Connect and send data
-        if (client.connect(serverIP, serverPort)) {
-            Serial.println("Connected to server!");
+        if (!client.connected()) {
+            Serial.println("Attempting to connect to server...");
+            if (client.connect(serverIP, serverPort)) {
+                Serial.println("Connected to server!");
+            } else {
+                Serial.println("Failed to connect to server.");
+                bufferMutex.unlock();
+                ThisThread::sleep_for(2s);
+                continue; // Skip to the next iteration
+            }
+        }
 
             byte* input_buffer = fb.getBuffer();
             size_t bufferSize = cam.frameSize();
 
-            const size_t capacity = JSON_OBJECT_SIZE(5) + 100;
+            const size_t capacity = JSON_OBJECT_SIZE(4) + 100;
             DynamicJsonDocument jsonDoc(capacity);
             jsonDoc["gps"] = "37.7749,-122.4194";
             jsonDoc["noise"] = String(averageDb, 2);
@@ -136,7 +148,7 @@ void networkTask() {
 
             int content_length = jsonString.length() + bufferSize + 2;
 
-
+            // send HTTP POST request to server
             client.println("POST /upload HTTP/1.1");
             client.print("Host: ");
             client.print(serverIP);
@@ -150,40 +162,58 @@ void networkTask() {
 
 
 
+            // Send image data in chunks with error handling
             size_t bytesSent = 0;
-            while (bytesSent < bufferSize) {
-                size_t bytesToSend = min((size_t)64, bufferSize - bytesSent);
+            int retries = 0;
+            const int maxRetries = 3;
+
+            while (bytesSent < bufferSize && retries < maxRetries) {
+                size_t bytesToSend = min(CHUNK_SIZE, bufferSize - bytesSent);
                 size_t bytesWritten = client.write(input_buffer + bytesSent, bytesToSend);
 
-                // you can uncomment this if this is better
-                // or not
+                if (bytesWritten == bytesToSend) {
+                    bytesSent += bytesWritten;
+                    retries = 0; // Reset retries on success
+                    Serial.print("Sent chunk: ");
+                    Serial.print(bytesSent);
+                    Serial.println(" / " + String(bufferSize));
+                } else {
+                    Serial.println("Error sending chunk. Retrying...");
+                    retries++;
+                    ThisThread::sleep_for(500ms * retries);
+                }
+            }
 
-                // also change the chunk size above
-                // but if too large, it will not work
-                // if (bytesWritten != bytesToSend){
-                //     Serial.println("Error sending image.");
-                //     Serial.println(bytesWritten);
-                //     break;
-                // }
-                bytesSent += bytesWritten;
+            if (retries >= maxRetries) {
+                Serial.println("Failed to send image after multiple retries.");
+                client.stop();
+                Serial.println("Disconnected from server");
+            } else {
+                Serial.println("Image sent successfully!");
+            }
+
+
+            // Wait for server response
+            unsigned long startTime = millis();
+            const unsigned long responseTimeout = 5000;
+
+            while (client.available() == 0 && (millis() - startTime < responseTimeout)) {
                 ThisThread::sleep_for(10ms);
             }
 
-            // ThisThread::sleep_for(50ms);
-            // String serialized = "{\"gps\":\"37.7749,-122.4194\",\"noise\":\"";
-            // serialized += String(averageDb, 2);
-            // serialized += "\",\"date\":\"2023-10-01 12:00:00\",\"id\":\"device_123\"}";
-            // client.println();
-            // client.println();
-            // client.println(serialized);
-            client.stop();
-            Serial.println("Data sent!");
-        } else {
-            Serial.println("Failed to connect to server.");
-        }
+            if (client.available() == 0) {
+                Serial.println("Timeout waiting for server response.");
+                client.stop();
+                Serial.println("Disconnected from server");
+            }
 
-        bufferMutex.unlock();
-        ThisThread::sleep_for(5s);
+            if (client.connected()) {
+            client.stop();
+            Serial.println("Disconnected from server");
+            }
+
+            bufferMutex.unlock();
+            ThisThread::sleep_for(5s);
     }
 }
 
