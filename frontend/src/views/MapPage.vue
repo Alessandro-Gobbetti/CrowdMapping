@@ -1,9 +1,16 @@
 <template>
   <div>
-    <h1>Crowd Mapping</h1>
+    <Header />
+    <!-- Updated Intro Section -->
+    <section class="content">
+      <div class="intro">
+        <h1>Explore the Pulse of Your City</h1>
+        <p>Real-time maps displaying crowd density, noise levels, and traffic flow. Plan your journeys smarter.</p>
+      </div>
+    </section>
 
     <!-- Toggle to switch between maps -->
-    <div>
+    <div class="map-toggle">
       <label for="map-type">Select Map Type:</label>
       <select v-model="mapType" id="map-type">
         <option value="crowd">Crowd Map</option>
@@ -12,35 +19,51 @@
       </select>
     </div>
 
-    <!-- Container for the map -->
-    <div id="map-container" style="height: 500px; width: 100%; margin-top: 20px;">
-      <div id="map" style="height: 100%; width: 100%;"></div>
+    <!-- Map container in a styled box -->
+    <div class="map-box">
+      <h2>{{ mapType === "crowd" ? "Crowd Map" : mapType === "noise" ? "Noise Map" : "Vehicles Map" }}</h2>
+      <div id="map-container">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Section for graph -->
+    <div class="graph-box">
+      <h2>People Data Over Time</h2>
+      <canvas id="peopleGraph"></canvas>
     </div>
   </div>
 </template>
 
 <script>
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { viewDepthKey } from "vue-router";
+import L from "leaflet";
+import Header from "./Header.vue"; // Relative path as both are in the same folder
+import Chart from 'chart.js/auto';
 
 export default {
+  components: {
+    Header,
+  },
+
   name: "MapPage",
   data() {
     return {
-      map: null, // Initialize the map once
-      mapType: "crowd", // Default to the crowd map
-      crowdLayer: null, // Layer for crowd markers and circles
-      noiseLayer: null, // Layer for noise markers and circles
-      vehiclesLayer: null, // Layer for vehicle markers and circles
-      locations: [], // Array to store multiple locations
+      map: null,
+      mapType: "crowd",
+      crowdLayer: null,
+      noiseLayer: null,
+      vehiclesLayer: null,
+      locations: [],
     };
   },
   async mounted() {
     this.initMap();
     await this.fetchData();
+    this.displayGraph();  // Add this line to display the graph when the page is mounted
   },
   methods: {
+
     initMap() {
       // Initialize the main map (shared for all types)
       this.map = L.map("map").setView([46.0168, 8.9575], 15);
@@ -214,22 +237,106 @@ export default {
       this.updateMapView();
     },
   },
+
+  
 };
 </script>
 
 <style scoped>
-/* Ensure map height is set correctly */
-#map-container {
-  height: 900px;
-  /* Increased height */
-  width: 100%;
-  margin-top: 20px;
+/* Set a darker background for the entire page */
+body {
+  background-color: #033649; /* Darker shade similar to the intro box */
+  color: #fff; /* White text for readability */
+  margin: 0;
+  font-family: Arial, sans-serif;
 }
 
-/* Style for the map */
+/* Intro section with a gradient background */
+.intro {
+  background: linear-gradient(to bottom right, #036564, #033649);
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Content section styling */
+.content {
+  text-align: center;
+  margin: 50px auto;
+  color: #fff;
+}
+
+/* Map toggle section */
+.map-toggle {
+  text-align: center;
+  margin: 20px 0;
+}
+
+/* Style for the dropdown */
+#map-type {
+  background-color: #036564; /* Darker background for dropdown */
+  color: white; /* White text */
+  font-size: 1rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 2px solid #028582; /* Light border for focus */
+  cursor: pointer;
+  appearance: none;
+  transition: all 1.0s ease;
+  width: 200px;
+  margin: 0 auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Hover effect for dropdown */
+#map-type:hover {
+  background-color: #028582; /* Slightly lighter on hover */
+  border-color: #026a6a;
+}
+
+/* Focus effect for dropdown */
+#map-type:focus {
+  outline: none;
+  box-shadow: 0 0 10px rgba(0, 168, 255, 0.7);
+  border-color: #00a8ff;
+}
+
+/* Map box with white background and shadows and hover transition effect */
+.map-box {
+  margin: 20px auto;
+  padding: 15px;
+  background: linear-gradient(to bottom right, #036564, #033649);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 90%;
+  transition: all 0.5s ease;
+}
+
+.map-box:hover {
+  background: linear-gradient(to bottom right, #048f84, #045164);
+  transform: scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+
+/* Map box title */
+.map-box h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+/* Map container styles */
+#map-container {
+  height: 600px;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
 #map {
   height: 100%;
-  /* Ensure the map fills the container */
   width: 100%;
 }
 </style>

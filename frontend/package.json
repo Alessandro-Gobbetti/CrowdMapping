@@ -12,6 +12,7 @@
   "dependencies": {
     "@mdi/font": "5.9.55",
     "express": "^4.18.1",
+    "leaflet": "^1.9.4",
     "troisjs": "^0.3.3",
     "vue": "^3.2.33",
     "vue-cookies": "^1.8.2",
