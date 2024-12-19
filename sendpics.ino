@@ -59,7 +59,7 @@ bool initialGPSFixSuccess = false;
 const unsigned long FIRST_FIX_TIMEOUT = 10000;
 const unsigned long SUBSEQUENT_FIX_TIMEOUT = 1000;
 
-// Chunk size for image transmission
+// Chunk size for image transmission (prone to failure if sent all at once)
 const size_t CHUNK_SIZE = 512;
 
 struct GPSData {
@@ -157,15 +157,15 @@ void gpsTask() {
             gpsMutex.unlock();
         }
 
-        ThisThread::sleep_for(100ms); // Adjust sleep duration as needed
+        ThisThread::sleep_for(100ms);
     }
 }
 
 void networkTask() {
     while (true) {
-        // Wait until we have some data
+
         bufferMutex.lock();
-        // Compute audio stats
+        // Compute noise level
         double sumSquared = 0.0;
         for (int i = 0; i < samplesRead; i++) {
             double sample = (double)audioBuffer[i];
@@ -180,7 +180,7 @@ void networkTask() {
         unsigned long gpsTimeout;
         bool gotGPSFix = false;
 
-        \
+
         if (firstGPSFixAttempt) {
             gpsTimeout = FIRST_FIX_TIMEOUT;
 
@@ -202,6 +202,7 @@ void networkTask() {
             gpsTimeout = SUBSEQUENT_FIX_TIMEOUT;
 
             // Wait for GPS fix only if the initial fix was successful (needed for indoor demo)
+            // to be removed or tweaked in real deployment
             while (millis() - gpsStartTime < gpsTimeout) {
                 gpsMutex.lock();
                 capturedGPSData = currentGPSData;
@@ -235,8 +236,8 @@ void networkTask() {
             }
         }
 
-            byte* input_buffer = fb.getBuffer();
-            size_t bufferSize = cam.frameSize();
+            byte* input_buffer = fb.getBuffer(); // image data
+            size_t bufferSize = cam.frameSize(); // length in bytes of image data
 
             const size_t capacity = JSON_OBJECT_SIZE(5) + 100;
             DynamicJsonDocument jsonDoc(capacity);
@@ -263,7 +264,7 @@ void networkTask() {
 
 
 
-            int content_length = jsonString.length() + bufferSize + 2;
+            int content_length = jsonString.length() + bufferSize + 2; // 2 for `\r\n` inserted by println
 
             // send HTTP POST request to server
             client.println("POST /upload HTTP/1.1");

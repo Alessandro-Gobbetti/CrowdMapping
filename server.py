@@ -1,4 +1,5 @@
 import datetime
+import random
 from flask import Flask, jsonify, request, Blueprint
 from flask_cors import CORS
 import base64
@@ -419,7 +420,7 @@ def get_statistics():
 def upload_data():
 
     data = request.get_data()
-    # print(len(data))
+    print(len(data))
     # parse request: split data into image and metadata
     # there's only one println
     parsed_data = data.split(b'\r\n')
@@ -443,25 +444,26 @@ def upload_data():
         return jsonify({"status": "error", "message": "Invalid image data"}), 400
 
     # save the image to a file
-    # image_filename = os.path.join("images", "last_image.png")
+
+    image_filename = os.path.join("images", f"test_{random.randint(1000,9999)}.png")
+
     # plt.imsave(image_filename, image_array, cmap='gray')
 
     image = np.stack((image_array,) * 3, axis=-1)
     people, vehicles = count_objects(image)
 
     # push data to mongo database
-    gps_lat = float(json_data.get("gps_lat")) or 0.0
-    gps_lon = float(json_data.get("gps_lon")) or 0.0
+    gps_lat = float(json_data.get("gps_lat")) or 46.01092904548972
+    gps_lon = float(json_data.get("gps_lon")) or 8.958154842805385
     noise = float(json_data.get("noise") or 0)
-    date = json_data.get("date") or datetime.datetime.now().isoformat()
+    print(noise)
+    date = json_data.get("date") or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # todo: parse date
-    # doesn't work if you reassign the variable date from str to datetime
-    date_object = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-    print(date_object.isoformat()) # like 2023-10-01T12:00:00
+
+
     device_id = json_data.get("id") or "0"
 
-    # replace `date` with `date_object.isoformat()` if you want a string, or just `date_object` if you want a datetime object
+
     add_new_data_to_db(people, vehicles, gps_lat,
                        gps_lon, noise, date, device_id)
 
