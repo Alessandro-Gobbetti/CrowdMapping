@@ -252,7 +252,7 @@ void networkTask() {
                 Serial.println("GPS data not available. Sending without GPS.");
                 jsonDoc["gps_lat"] = "0";
                 jsonDoc["gps_lon"] = "0";
-                jsonDoc["time"] = "";
+                jsonDoc["date"] = "";
             }
 
             String jsonString;
