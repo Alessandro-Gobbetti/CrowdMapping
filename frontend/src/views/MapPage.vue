@@ -8,17 +8,24 @@
         <p>Real-time maps displaying crowd density, noise levels, and traffic flow. Plan your journeys smarter.</p>
       </div>
     </section>
+    <div class="select">
+      <!-- Toggle to switch between maps -->
+      <div class="map-toggle">
+        <!-- date and time picker, value is in data -->
+        <label for="map-type">Select Map Type: </label>
+        <select v-model="mapType" id="map-type">
+          <option value="crowd">Crowd Map</option>
+          <option value="noise">Noise Level Map</option>
+          <option value="vehicles">Vehicles Map</option>
+        </select>
+      </div>
 
-    <!-- Toggle to switch between maps -->
-    <div class="map-toggle">
-      <label for="map-type">Select Map Type:</label>
-      <select v-model="mapType" id="map-type">
-        <option value="crowd">Crowd Map</option>
-        <option value="noise">Noise Level Map</option>
-        <option value="vehicles">Vehicles Map</option>
-      </select>
+      <div>
+        Date Range:
+        <input type="datetime-local" v-model="date_start" @change="fetchData" />
+        <input type="datetime-local" v-model="date_end" @change="fetchData" />
+      </div>
     </div>
-
     <!-- Map container in a styled box -->
     <div class="map-box">
       <h2>{{ mapType === "crowd" ? "Crowd Map" : mapType === "noise" ? "Noise Map" : "Vehicles Map" }}</h2>
@@ -30,10 +37,10 @@
     <!-- Section for graph -->
     <div class="graph-box">
       <h2>People Data Over Time</h2>
-      
+
       <!-- Date Picker -->
       <input type="date" v-model="selectedDate" @change="filterDataByDate" />
-      
+
       <canvas id="peopleGraph"></canvas>
     </div>
   </div>
@@ -60,6 +67,9 @@ export default {
       vehiclesLayer: null,
       locations: [],
       selectedDate: "", // To store selected date
+      // date range last 2h
+      date_start: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replace(/:\d\d\.\d\d\dZ$/, ''),
+      date_end: new Date().toISOString().replace(/:\d\d\.\d\d\dZ$/, ''),
     };
   },
   async mounted() {
@@ -84,7 +94,7 @@ export default {
     async fetchData() {
       try {
         // Fetch data from the server
-        const date_range = ['2021-10-01 10:10:19', '2025-10-31 10:10:19'];
+        const date_range = [new Date(this.date_start).toISOString().slice(0, -5), new Date(this.date_end).toISOString().slice(0, -5)].map(date => date.split('T').join(' '));
         const url = `${import.meta.env.VITE_BACKEND_URL}/get?date_range=${date_range.join(',')}`;
         const response = await fetch(url, {
           method: "GET",
@@ -117,73 +127,73 @@ export default {
     },
 
     filterDataByDate() {
-  const filteredLocations = this.locations.filter(location => {
-    return location.date.startsWith(this.selectedDate); // Filter data by the selected date
-  });
+      const filteredLocations = this.locations.filter(location => {
+        return location.date.startsWith(this.selectedDate); // Filter data by the selected date
+      });
 
-  // Destroy the existing chart if it exists
-  if (this.peopleChart) {
-    this.peopleChart.destroy();
-  }
+      // Destroy the existing chart if it exists
+      if (this.peopleChart) {
+        this.peopleChart.destroy();
+      }
 
-  // Create a new chart with the filtered data
-  this.peopleChart = new Chart(document.getElementById("peopleGraph"), {
-    type: "line",
-    data: {
-      labels: filteredLocations.map(location => location.date),
-      datasets: [
-        {
-          label: "People",
-          data: filteredLocations.map(location => location.people),
-          borderColor: "red",
-          fill: false,
-          tension: 0.1,
+      // Create a new chart with the filtered data
+      this.peopleChart = new Chart(document.getElementById("peopleGraph"), {
+        type: "line",
+        data: {
+          labels: filteredLocations.map(location => location.date),
+          datasets: [
+            {
+              label: "People",
+              data: filteredLocations.map(location => location.people),
+              borderColor: "red",
+              fill: false,
+              tension: 0.1,
+            },
+            {
+              label: "Noise",
+              data: filteredLocations.map(location => location.noise),
+              borderColor: "blue",
+              fill: false,
+              tension: 0.1,
+            },
+            {
+              label: "Vehicles",
+              data: filteredLocations.map(location => location.vehicles),
+              borderColor: "green",
+              fill: false,
+              tension: 0.1,
+            },
+          ],
         },
-        {
-          label: "Noise",
-          data: filteredLocations.map(location => location.noise),
-          borderColor: "blue",
-          fill: false,
-          tension: 0.1,
-        },
-        {
-          label: "Vehicles",
-          data: filteredLocations.map(location => location.vehicles),
-          borderColor: "green",
-          fill: false,
-          tension: 0.1,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        title: {
-          display: true,
-          text: "People, Noise, and Vehicles Data Over Time",
-        },
-        tooltip: {
-          mode: "index",
-          intersect: false,
-        },
-      },
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: "Time",
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: "People, Noise, and Vehicles Data Over Time",
+            },
+            tooltip: {
+              mode: "index",
+              intersect: false,
+            },
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: "Time",
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Count/Level",
+              },
+            },
           },
         },
-        y: {
-          title: {
-            display: true,
-            text: "Count/Level",
-          },
-        },
-      },
+      });
     },
-  });
-},
 
     // Method to display the graph
     displayGraph(filteredData = this.locations) {
@@ -255,8 +265,8 @@ export default {
     },
 
     // Add methods for adding markers and circles as in your original code...
-   // Method to add crowd marker and circle
-   addCrowdMarkerAndCircle(lat, lon, locationData) {
+    // Method to add crowd marker and circle
+    addCrowdMarkerAndCircle(lat, lon, locationData) {
       const radius = 100;
       let circleColor;
 
@@ -281,7 +291,8 @@ export default {
         `<strong>People:</strong> ${locationData.people} <br>
         <strong>Usual:</strong> ${Math.round(locationData.stats_people)} <br>
         <strong>Crowd:</strong> ${Math.round(locationData.people / locationData.stats_people * 100)}%`,
-        {direction: "top",
+        {
+          direction: "top",
           offset: [0, -10],
           className: "fade-tooltip",
         }
@@ -372,7 +383,7 @@ export default {
       }
     },
   },
-  
+
   watch: {
     mapType(newType) {
       this.updateMapView();
@@ -385,8 +396,10 @@ export default {
 <style scoped>
 /* Set a darker background for the entire page */
 body {
-  background-color: #033649; /* Darker shade similar to the intro box */
-  color: #fff; /* White text for readability */
+  background-color: #033649;
+  /* Darker shade similar to the intro box */
+  color: #fff;
+  /* White text for readability */
   margin: 0;
   font-family: Arial, sans-serif;
 }
@@ -406,6 +419,12 @@ body {
   color: #fff;
 }
 
+.select {
+  grid-template-columns: 1fr 1fr;
+  text-align: center;
+  margin: 20px auto;
+}
+
 /* Map toggle section */
 .map-toggle {
   text-align: center;
@@ -414,12 +433,15 @@ body {
 
 /* Style for the dropdown */
 #map-type {
-  background-color: #036564; /* Darker background for dropdown */
-  color: white; /* White text */
+  background-color: #036564;
+  /* Darker background for dropdown */
+  color: white;
+  /* White text */
   font-size: 1rem;
   padding: 10px 20px;
   border-radius: 8px;
-  border: 2px solid #028582; /* Light border for focus */
+  border: 2px solid #028582;
+  /* Light border for focus */
   cursor: pointer;
   appearance: none;
   transition: all 1.0s ease;
@@ -430,7 +452,8 @@ body {
 
 /* Hover effect for dropdown */
 #map-type:hover {
-  background-color: #028582; /* Slightly lighter on hover */
+  background-color: #028582;
+  /* Slightly lighter on hover */
   border-color: #026a6a;
 }
 
@@ -501,7 +524,8 @@ body {
 .graph-box h2 {
   text-align: center;
   font-size: 1.5rem;
-  color: #fff; /* White color for the header */
+  color: #fff;
+  /* White color for the header */
   margin-bottom: 15px;
 }
 
@@ -509,7 +533,7 @@ body {
 canvas {
   border-radius: 10px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  background-color: #fff; /* White background for the chart */
+  background-color: #fff;
+  /* White background for the chart */
 }
-
 </style>
