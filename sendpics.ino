@@ -131,9 +131,10 @@ void networkTask() {
             byte* input_buffer = fb.getBuffer();
             size_t bufferSize = cam.frameSize();
 
-            const size_t capacity = JSON_OBJECT_SIZE(4) + 100;
+            const size_t capacity = JSON_OBJECT_SIZE(5) + 100;
             DynamicJsonDocument jsonDoc(capacity);
-            jsonDoc["gps"] = "37.7749,-122.4194";
+            jsonDoc["gps_lat"] = "37.7749";
+            jsonDoc["gps_lon"] = "-122.4194";
             jsonDoc["noise"] = String(averageDb, 2);
             jsonDoc["date"] = "2023-10-01 12:00:00";
             jsonDoc["id"] = "device_123";

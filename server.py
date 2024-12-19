@@ -56,26 +56,31 @@ def count_objects(image):
     a = results[0].boxes.data
     px = pd.DataFrame(a).astype("float")
     # add class names to the dataframe
-    px['class'] = px[5].map(lambda x: class_list[int(x)])
+    # i added a try, except for when detection doesn't find anything
+    # (i assume that's the problem, giving an empty px that has no px[5] column)
+    try:
+        px['class'] = px[5].map(lambda x: class_list[int(x)])
 
-    people = []
-    vehicles = []
+        people = []
+        vehicles = []
 
-    for index, row in px.iterrows():
-        x1 = int(row[0])
-        y1 = int(row[1])
-        x2 = int(row[2])
-        y2 = int(row[3])
-        d = int(row[5])
+        for index, row in px.iterrows():
+            x1 = int(row[0])
+            y1 = int(row[1])
+            x2 = int(row[2])
+            y2 = int(row[3])
+            d = int(row[5])
 
-        c = class_list[d]
+            c = class_list[d]
 
-        if 'person' in c:
-            people.append([x1, y1, x2, y2])
-        elif c in vehicle_types:
-            vehicles.append([x1, y1, x2, y2])
+            if 'person' in c:
+                people.append([x1, y1, x2, y2])
+            elif c in vehicle_types:
+                vehicles.append([x1, y1, x2, y2])
 
-    return len(people), len(vehicles)
+        return len(people), len(vehicles)
+    except:
+        return 0, 0
 
 
 def print_all_db():
@@ -181,7 +186,7 @@ def approximate_gps(gps_lat, gps_lon, precision=1000):
         gps (str): A string representing the GPS coordinates in the format "latitude,longitude".
         precision (int, optional): The precision for rounding the coordinates. Default is 4.
     Returns:
-        list of tuples: A list of four tuples, each containing the latitude, longitude, and weight of the 
+        list of tuples: A list of four tuples, each containing the latitude, longitude, and weight of the
                         approximated grid points. The weights are computed using bilinear interpolation.
     """
     lat, lon = gps_lat, gps_lon
@@ -366,7 +371,7 @@ def main():
 @app.route('/get', methods=['GET'])
 def get_statistics():
     """
-    Get the data and statistics on the history of the neighborhood of each entry in the database for a given date range. 
+    Get the data and statistics on the history of the neighborhood of each entry in the database for a given date range.
     Only most recent data from sanme device when in the same location is considered.
     """
 
@@ -414,8 +419,11 @@ def get_statistics():
 def upload_data():
 
     data = request.get_data()
+    # print(len(data))
     # parse request: split data into image and metadata
-    parsed_data = data.split(b'\r\n\r\n')
+    # there's only one println
+    parsed_data = data.split(b'\r\n')
+
     if len(parsed_data) != 2:
         return jsonify({"status": "error", "message": "Missing data"}), 400
 
@@ -446,10 +454,14 @@ def upload_data():
     gps_lon = float(json_data.get("gps_lon")) or 0.0
     noise = float(json_data.get("noise") or 0)
     date = json_data.get("date") or datetime.datetime.now().isoformat()
+
     # todo: parse date
-    date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    # doesn't work if you reassign the variable date from str to datetime
+    date_object = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    print(date_object.isoformat()) # like 2023-10-01T12:00:00
     device_id = json_data.get("id") or "0"
 
+    # replace `date` with `date_object.isoformat()` if you want a string, or just `date_object` if you want a datetime object
     add_new_data_to_db(people, vehicles, gps_lat,
                        gps_lon, noise, date, device_id)
 
