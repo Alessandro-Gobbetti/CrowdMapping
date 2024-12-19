@@ -30,6 +30,10 @@
     <!-- Section for graph -->
     <div class="graph-box">
       <h2>People Data Over Time</h2>
+      
+      <!-- Date Picker -->
+      <input type="date" v-model="selectedDate" @change="filterDataByDate" />
+      
       <canvas id="peopleGraph"></canvas>
     </div>
   </div>
@@ -55,15 +59,15 @@ export default {
       noiseLayer: null,
       vehiclesLayer: null,
       locations: [],
+      selectedDate: "", // To store selected date
     };
   },
   async mounted() {
     this.initMap();
     await this.fetchData();
-    this.displayGraph();  // Add this line to display the graph when the page is mounted
+    this.displayGraph();  // Initially display the graph
   },
   methods: {
-
     initMap() {
       // Initialize the main map (shared for all types)
       this.map = L.map("map").setView([46.0168, 8.9575], 15);
@@ -112,8 +116,147 @@ export default {
       }
     },
 
-    // Method to add crowd marker and circle
-    addCrowdMarkerAndCircle(lat, lon, locationData) {
+    filterDataByDate() {
+  const filteredLocations = this.locations.filter(location => {
+    return location.date.startsWith(this.selectedDate); // Filter data by the selected date
+  });
+
+  // Destroy the existing chart if it exists
+  if (this.peopleChart) {
+    this.peopleChart.destroy();
+  }
+
+  // Create a new chart with the filtered data
+  this.peopleChart = new Chart(document.getElementById("peopleGraph"), {
+    type: "line",
+    data: {
+      labels: filteredLocations.map(location => location.date),
+      datasets: [
+        {
+          label: "People",
+          data: filteredLocations.map(location => location.people),
+          borderColor: "red",
+          fill: false,
+          tension: 0.1,
+        },
+        {
+          label: "Noise",
+          data: filteredLocations.map(location => location.noise),
+          borderColor: "blue",
+          fill: false,
+          tension: 0.1,
+        },
+        {
+          label: "Vehicles",
+          data: filteredLocations.map(location => location.vehicles),
+          borderColor: "green",
+          fill: false,
+          tension: 0.1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: {
+          display: true,
+          text: "People, Noise, and Vehicles Data Over Time",
+        },
+        tooltip: {
+          mode: "index",
+          intersect: false,
+        },
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: "Time",
+          },
+        },
+        y: {
+          title: {
+            display: true,
+            text: "Count/Level",
+          },
+        },
+      },
+    },
+  });
+},
+
+    // Method to display the graph
+    displayGraph(filteredData = this.locations) {
+      // Wait for the fetchData function to populate this.locations
+      this.$nextTick(() => {
+        const labels = filteredData.map(location => location.date);
+        const peopleData = filteredData.map(location => location.people);
+        const noiseData = filteredData.map(location => location.noise);
+        const vehiclesData = filteredData.map(location => location.vehicles);
+
+        // Create the chart
+        new Chart(document.getElementById("peopleGraph"), {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "People",
+                data: peopleData,
+                borderColor: "red",
+                fill: false,
+                tension: 0.1,
+              },
+              {
+                label: "Noise",
+                data: noiseData,
+                borderColor: "blue",
+                fill: false,
+                tension: 0.1,
+              },
+              {
+                label: "Vehicles",
+                data: vehiclesData,
+                borderColor: "green",
+                fill: false,
+                tension: 0.1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: {
+                display: true,
+                text: "People, Noise, and Vehicles Data Over Time",
+              },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+              },
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Time",
+                },
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Count/Level",
+                },
+              },
+            },
+          },
+        });
+      });
+    },
+
+    // Add methods for adding markers and circles as in your original code...
+   // Method to add crowd marker and circle
+   addCrowdMarkerAndCircle(lat, lon, locationData) {
       const radius = 100;
       let circleColor;
 
@@ -138,8 +281,7 @@ export default {
         `<strong>People:</strong> ${locationData.people} <br>
         <strong>Usual:</strong> ${Math.round(locationData.stats_people)} <br>
         <strong>Crowd:</strong> ${Math.round(locationData.people / locationData.stats_people * 100)}%`,
-        {
-          direction: "top",
+        {direction: "top",
           offset: [0, -10],
           className: "fade-tooltip",
         }
@@ -230,17 +372,15 @@ export default {
       }
     },
   },
-
+  
   watch: {
-    // Watch for map type change and update the map accordingly
     mapType(newType) {
       this.updateMapView();
     },
   },
-
-  
 };
 </script>
+
 
 <style scoped>
 /* Set a darker background for the entire page */
@@ -339,4 +479,37 @@ body {
   height: 100%;
   width: 100%;
 }
+
+/* Graph box style to match the map box */
+.graph-box {
+  margin: 20px auto;
+  padding: 15px;
+  background: linear-gradient(to bottom right, #036564, #033649);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 90%;
+  transition: all 0.5s ease;
+}
+
+.graph-box:hover {
+  background: linear-gradient(to bottom right, #048f84, #045164);
+  transform: scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Graph header styling */
+.graph-box h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  color: #fff; /* White color for the header */
+  margin-bottom: 15px;
+}
+
+/* Chart container */
+canvas {
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background-color: #fff; /* White background for the chart */
+}
+
 </style>
